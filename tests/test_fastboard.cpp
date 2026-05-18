@@ -1,6 +1,7 @@
 #include "player/my_observer.hpp"
 #include "player/my_player.hpp"
 #include <cassert>
+#include <iostream>
 
 int main(int argc, char *argv[]) {
     ttt::game::State::Opts opts;
@@ -12,6 +13,8 @@ int main(int argc, char *argv[]) {
     auto state = ttt::game::State(opts, &random_fi);
     auto board = ttt::my_player::MyPlayer::FastBoard();
     board.sync(state);
+
+    std::cout << "Testing my FastBoard\n";
 
     for (int y = 0; y < opts.rows; y++)
     {
@@ -45,5 +48,6 @@ int main(int argc, char *argv[]) {
     board.set(19, 19, ttt::game::Sign::WALL);
     assert(board.get(19, 19) == ttt::game::Sign::WALL);
 
+    std::cout << "All is correct\n";
     return 0;
 }
