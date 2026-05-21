@@ -56,70 +56,55 @@ namespace ttt::my_player
       {
         window[i] = temp % 3;
         if (window[i] == 1)
-        { 
-          ownCount++;
-        }
+          ownCount++; // наш символ
         else if (window[i] == 0)
-        { 
-          emptyCount++;
-        }
+          emptyCount++; // пусто
         else
-        { 
-          blockedCount++;
-        }
+          blockedCount++; // чужой символ или стена
         temp /= 3;
       }
+      // если есть чужой или стена внутри окна -> оценка 0
       if (blockedCount > 0)
       {
         s_patternScore[idx] = 0;
         continue;
       }
+      // дальше идет оценка шаблонов
       if (ownCount == 5)
-      {
         s_patternScore[idx] = WIN_SCORE;
-      }
+  
       else if (ownCount == 4 && emptyCount == 1)
-      {
-        s_patternScore[idx] = 500000LL; 
-      }
+        s_patternScore[idx] = 500000LL; // открытая четверка
+
       else if (ownCount == 4)
-      {
-        s_patternScore[idx] = 50000LL;
-      }
+        s_patternScore[idx] = 50000LL; // закрытая четверка
+
       else if (ownCount == 3 && emptyCount == 2)
       {
         if (window[0] == 0 && window[4] == 0)
-        {
-          s_patternScore[idx] = 20000LL; 
-        }
+          s_patternScore[idx] = 20000LL; // открытая по краям тройка
         else
-        {
-          s_patternScore[idx] = 5000LL; 
-        }
+          s_patternScore[idx] = 5000LL; // полуоткрытая тройка
       }
+
       else if (ownCount == 2 && emptyCount == 3)
       {
         if (window[0] == 0 && window[4] == 0)
-        {
-          s_patternScore[idx] = 500LL;
-        }
+          s_patternScore[idx] = 500LL; // открытая двойка
         else
-        {
-          s_patternScore[idx] = 100LL; 
-        }
+          s_patternScore[idx] = 100LL; // полуоткрытая двойка
       }
+
       else if (ownCount == 1 && emptyCount == 4)
-      {
         s_patternScore[idx] = 30LL;
-      }
+
       else
-      {
         s_patternScore[idx] = 0;
-      }
     }
 
     s_tablesInitialized = true;
   }
+
   int MyPlayer::windowToIndex(const std::array<int, 5> &window)
   {
     int idx = 0;
