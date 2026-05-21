@@ -3,6 +3,10 @@
 
 namespace ttt::my_player
 {
+
+  std::array<long long, 243> MyPlayer::s_patternScore;
+  bool MyPlayer::s_tablesInitialized = false;
+  
   static const long long WIN_SCORE = 1000000000LL;
 
   void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
@@ -72,7 +76,7 @@ namespace ttt::my_player
       // дальше идет оценка шаблонов
       if (ownCount == 5)
         s_patternScore[idx] = WIN_SCORE;
-  
+
       else if (ownCount == 4 && emptyCount == 1)
         s_patternScore[idx] = 500000LL; // открытая четверка
 
@@ -115,6 +119,75 @@ namespace ttt::my_player
       power *= 3;
     }
     return idx;
+  }
+
+  void MyPlayer::buildLine(const FastBoard &board, Sign player, int x, int y,
+                           int dx, int dy, std::array<int, 9> &line) const
+  {
+    for (int k = -4; k <= 4; ++k)
+    {
+      int idx = k + 4;
+      if (k == 0)
+      {
+        line[idx] = 1;
+        continue;
+      }
+
+      int nx = x + k * dx;
+      int ny = y + k * dy;
+      Sign val = board.get(nx, ny);
+
+      if (val == player)
+        line[idx] = 1; // свой символ
+      else if (val == Sign::NONE)
+        line[idx] = 0; // пусто
+      else
+        line[idx] = 2; // чужой или стена
+    }
+  }
+
+  long long MyPlayer::scoreLine(const std::array<int, 9> &line) const
+  {
+    long long score = 0;
+    // окна по 5 клеток
+    for (int i = 0; i < 5; ++i)
+    {
+      std::array<int, 5> window;
+      for (int j = 0; j < 5; ++j)
+        window[j] = line[i + j];
+
+      int idx = windowToIndex(window);
+      score += s_patternScore[idx];
+    }
+    return score;
+  }
+
+  long long MyPlayer::valueScore(const FastBoard &board, Sign player, int x, int y) const
+  {
+    if (board.get(x, y) != Sign::NONE)
+      return 0;
+
+    const int directions[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
+    long long totalScore = 0;
+    int valueCount = 0;
+
+    for (const auto &dir : directions)
+    {
+      std::array<int, 9> line;
+      buildLine(board, player, x, y, dir[0], dir[1], line);
+      long long segmentScore = scoreLine(line);
+
+      if (segmentScore >= 5000) // открытая четвёрка или тройка
+      {
+        valueCount++;
+      }
+      totalScore += segmentScore;
+    }
+    if (valueCount >= 2)
+    {
+      totalScore *= 10;
+    }
+    return totalScore;
   }
 
   Point MyPlayer::make_move(const State &state)

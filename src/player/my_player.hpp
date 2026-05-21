@@ -13,14 +13,15 @@ namespace ttt::my_player
 
   class MyPlayer : public IPlayer
   {
+  // public:
     Sign m_sign = Sign::NONE;
     const char *m_name;
-  
+
     static std::array<long long, 243> s_patternScore;
     static bool s_tablesInitialized;
     static void initTables();
-    static int windowToIndex(const std::array<int, 5>& window);
-  
+    static int windowToIndex(const std::array<int, 5> &window);
+
     struct FastBoard
     {
       std::array<std::array<Sign, 20>, 20> grid;
@@ -31,7 +32,11 @@ namespace ttt::my_player
       void set(int x, int y, Sign sign);
       bool isValid(int x, int y) const;
     };
-  
+
+    long long scoreLine(const std::array<int, 9> &line) const;
+    void buildLine(const FastBoard &board, Sign player, int x, int y, int dx, int dy, std::array<int, 9> &line) const;
+    long long valueScore(const FastBoard &board, Sign player, int x, int y) const;
+
   public:
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
     void set_sign(Sign sign) override;
