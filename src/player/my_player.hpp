@@ -32,8 +32,9 @@ namespace ttt::my_player
       bool isValid(int x, int y) const;
     };
 
-    long long scoreLineSegment(const std::array<int, 9> &line) const;
-
+    long long scoreLine(const std::array<int, 9> &line) const;
+    void buildLine(const FastBoard& board, Sign player, int x, int y, int dx, int dy, std::array<int, 9>& line) const;
+    
   public:
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
     void set_sign(Sign sign) override;

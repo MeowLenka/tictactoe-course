@@ -152,7 +152,7 @@ namespace ttt::my_player
     return result;
   }
 
-  long long MyPlayer::scoreLineSegment(const std::array<int, 9> &line) const
+  long long MyPlayer::scoreLine(const std::array<int, 9> &line) const
   {
     long long score = 0;
     for (int i = 0; i < 5; ++i)
@@ -168,5 +168,36 @@ namespace ttt::my_player
 
     return score;
   }
+
+  void MyPlayer::buildLine(const FastBoard &board, Sign player, int x, int y,
+                           int dx, int dy, std::array<int, 9> &line) const
+  {
+    for (int k = -4; k <= 4; ++k)
+    {
+      int idx = k + 4;
+      if (k == 0)
+      {
+        line[idx] = 1; 
+        continue;
+      }
+
+      int nx = x + k * dx;
+      int ny = y + k * dy;
+      Sign val = board.get(nx, ny);
+
+      if (val == player)
+      {
+        line[idx] = 1; // свой символ
+      }
+      else if (val == Sign::NONE)
+      {
+        line[idx] = 0; // пусто
+      }
+      else
+      {
+        line[idx] = 2; // чужой или стена
+      }
+    }
+  
 
 }; // namespace ttt::my_player
