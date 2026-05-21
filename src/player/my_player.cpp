@@ -120,6 +120,17 @@ namespace ttt::my_player
 
     s_tablesInitialized = true;
   }
+  int MyPlayer::windowToIndex(const std::array<int, 5> &window)
+  {
+    int idx = 0;
+    int power = 1;
+    for (int i = 0; i < 5; ++i)
+    {
+      idx += window[i] * power;
+      power *= 3;
+    }
+    return idx;
+  }
 
   Point MyPlayer::make_move(const State &state)
   {
