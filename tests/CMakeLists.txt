@@ -15,6 +15,12 @@ target_link_libraries(test_fastboard tttplayer)
 add_test(NAME test_fastboard COMMAND ./test_fastboard)
 
 
+# My value score tests
+add_executable(test_valuescore test_value_score.cpp)
+target_link_libraries(test_valuescore tttplayer)
+add_test(NAME test_valuescore COMMAND ./test_value_score)
+
+
 # Targets that require full or prebuilt tttcore
 if((BUILD_TTTCORE STREQUAL "FULL") OR (BUILD_TTTCORE STREQUAL "PREBUILT"))
   # Baseline tests

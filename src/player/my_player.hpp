@@ -13,6 +13,7 @@ namespace ttt::my_player
 
   class MyPlayer : public IPlayer
   {
+  public:
     Sign m_sign = Sign::NONE;
     const char *m_name;
 
@@ -33,10 +34,9 @@ namespace ttt::my_player
     };
 
     long long scoreLine(const std::array<int, 9> &line) const;
-    void buildLine(const FastBoard& board, Sign player, int x, int y, int dx, int dy, std::array<int, 9>& line) const;
-    long long valueScore(const FastBoard& board, Sign player, int x, int y) const;
-    
-  public:
+    void buildLine(const FastBoard &board, Sign player, int x, int y, int dx, int dy, std::array<int, 9> &line) const;
+    long long valueScore(const FastBoard &board, Sign player, int x, int y) const;
+
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
     void set_sign(Sign sign) override;
     Point make_move(const State &game) override;
