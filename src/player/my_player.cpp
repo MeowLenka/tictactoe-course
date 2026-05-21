@@ -152,4 +152,21 @@ namespace ttt::my_player
     return result;
   }
 
+  long long MyPlayer::scoreLineSegment(const std::array<int, 9> &line) const
+  {
+    long long score = 0;
+    for (int i = 0; i < 5; ++i)
+    {
+      std::array<int, 5> window;
+      for (int j = 0; j < 5; ++j)
+      {
+        window[j] = line[i + j];
+      }
+      int idx = windowToIndex(window);
+      score += s_patternScore[idx];
+    }
+
+    return score;
+  }
+
 }; // namespace ttt::my_player
