@@ -34,6 +34,7 @@ namespace ttt::my_player
 
     long long scoreLine(const std::array<int, 9> &line) const;
     void buildLine(const FastBoard& board, Sign player, int x, int y, int dx, int dy, std::array<int, 9>& line) const;
+    long long valueScore(const FastBoard& board, Sign player, int x, int y) const;
     
   public:
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}

@@ -72,7 +72,7 @@ namespace ttt::my_player
       // дальше идет оценка шаблонов
       if (ownCount == 5)
         s_patternScore[idx] = WIN_SCORE;
-  
+
       else if (ownCount == 4 && emptyCount == 1)
         s_patternScore[idx] = 500000LL; // открытая четверка
 
@@ -177,7 +177,7 @@ namespace ttt::my_player
       int idx = k + 4;
       if (k == 0)
       {
-        line[idx] = 1; 
+        line[idx] = 1;
         continue;
       }
 
@@ -198,6 +198,34 @@ namespace ttt::my_player
         line[idx] = 2; // чужой или стена
       }
     }
-  
 
-}; // namespace ttt::my_player
+    long long MyPlayer::valueScore(const FastBoard &board, Sign player, int x, int y) const
+    {
+      if (board.get(x, y) != Sign::NONE)
+        return 0;
+
+      const int directions[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
+      long long totalScore = 0;
+      int threatCount = 0;
+
+      for (const auto &dir : directions)
+      {
+        std::array<int, 9> line;
+        buildLine(board, player, x, y, dir[0], dir[1], line);
+        long long segmentScore = scoreLine(line);
+
+        if (segmentScore >= 5000)
+        {
+          threatCount++;
+        }
+        totalScore += segmentScore;
+      }
+      if (threatCount >= 2)
+      {
+        totalScore *= 10;
+      }
+
+      return totalScore;
+    }
+
+  }; // namespace ttt::my_player
