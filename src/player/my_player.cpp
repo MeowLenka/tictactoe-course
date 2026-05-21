@@ -3,6 +3,7 @@
 
 namespace ttt::my_player
 {
+  static const long long WIN_SCORE = 1000000000LL;
 
   void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
   const char *MyPlayer::get_name() const { return m_name; }
@@ -36,6 +37,88 @@ namespace ttt::my_player
   {
     if (isValid(x, y))
       grid[y][x] = sign;
+  }
+
+  void MyPlayer::initTables()
+  {
+    if (s_tablesInitialized)
+      return;
+
+    for (int idx = 0; idx < 243; ++idx)
+    {
+      int temp = idx;
+      std::array<int, 5> window;
+      int ownCount = 0;
+      int emptyCount = 0;
+      int blockedCount = 0;
+
+      for (int i = 0; i < 5; ++i)
+      {
+        window[i] = temp % 3;
+        if (window[i] == 1)
+        { 
+          ownCount++;
+        }
+        else if (window[i] == 0)
+        { 
+          emptyCount++;
+        }
+        else
+        { 
+          blockedCount++;
+        }
+        temp /= 3;
+      }
+      if (blockedCount > 0)
+      {
+        s_patternScore[idx] = 0;
+        continue;
+      }
+      if (ownCount == 5)
+      {
+        s_patternScore[idx] = WIN_SCORE;
+      }
+      else if (ownCount == 4 && emptyCount == 1)
+      {
+        s_patternScore[idx] = 500000LL; 
+      }
+      else if (ownCount == 4)
+      {
+        s_patternScore[idx] = 50000LL;
+      }
+      else if (ownCount == 3 && emptyCount == 2)
+      {
+        if (window[0] == 0 && window[4] == 0)
+        {
+          s_patternScore[idx] = 20000LL; 
+        }
+        else
+        {
+          s_patternScore[idx] = 5000LL; 
+        }
+      }
+      else if (ownCount == 2 && emptyCount == 3)
+      {
+        if (window[0] == 0 && window[4] == 0)
+        {
+          s_patternScore[idx] = 500LL;
+        }
+        else
+        {
+          s_patternScore[idx] = 100LL; 
+        }
+      }
+      else if (ownCount == 1 && emptyCount == 4)
+      {
+        s_patternScore[idx] = 30LL;
+      }
+      else
+      {
+        s_patternScore[idx] = 0;
+      }
+    }
+
+    s_tablesInitialized = true;
   }
 
   Point MyPlayer::make_move(const State &state)

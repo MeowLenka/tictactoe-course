@@ -18,6 +18,7 @@ namespace ttt::my_player
   
     static std::array<long long, 243> s_patternScore;
     static bool s_tablesInitialized;
+    static void initTables();
   
     struct FastBoard
     {
