@@ -292,6 +292,127 @@ namespace ttt::my_player
     return myScore - static_cast<long long>(oppScore * POSITION_DEFENSE_FACTOR);
   }
 
+   bool MyPlayer::hasLineAfterMove(const FastBoard &board, int x, int y, Sign player) const
+  {
+    FastBoard copy = board;
+    copy.set(x, y, player);
+
+    const int directions[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
+    for (const auto &dir : directions)
+    {
+      int count = 1;
+      for (int i = 1; i <= 4; ++i)
+      {
+        Sign val = copy.get(x + i * dir[0], y + i * dir[1]);
+        if (val == player)
+          count++;
+        else
+          break;
+      }
+      for (int i = 1; i <= 4; ++i)
+      {
+        Sign val = copy.get(x - i * dir[0], y - i * dir[1]);
+        if (val == player)
+          count++;
+        else
+          break;
+      }
+
+      if (count >= WIN_LENGTH)
+        return true;
+    }
+    return false;
+  }
+
+  bool MyPlayer::isRealXWin(const FastBoard &board, int x, int y) const 
+  {
+    if (!hasLineAfterMove(board, x, y, Sign::X))
+      return false;
+
+    FastBoard afterX = board;
+    afterX.set(x, y, Sign::X);
+
+    // если поле заполнено, O не может ответить
+    int freeCount = 0;
+    for (int i = 0; i < afterX.rows; ++i)
+    {
+      for (int j = 0; j < afterX.cols; ++j)
+      {
+        if (afterX.get(j, i) == Sign::NONE)
+          freeCount++;
+      }
+    }
+    if (freeCount == 0)
+      return true;
+
+    // может ли O ответить победой
+    for (int oy = 0; oy < afterX.rows; ++oy)
+    {
+      for (int ox = 0; ox < afterX.cols; ++ox)
+      {
+        if (afterX.get(ox, oy) == Sign::NONE)
+        {
+          if (hasLineAfterMove(afterX, ox, oy, Sign::O))
+            return false;
+        }
+      }
+    }
+    return true;
+  }
+
+   bool MyPlayer::isXDraw(const FastBoard &board, int x, int y) const
+  {
+    if (!hasLineAfterMove(board, x, y, Sign::X))
+      return false;
+
+    FastBoard afterX = board;
+    afterX.set(x, y, Sign::X);
+
+    for (int oy = 0; oy < afterX.rows; ++oy)
+    {
+      for (int ox = 0; ox < afterX.cols; ++ox)
+      {
+        if (afterX.get(ox, oy) == Sign::NONE)
+        {
+          if (hasLineAfterMove(afterX, ox, oy, Sign::O))
+            return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Point MyPlayer::chooseFirstMove(const FastBoard &board, const ClusterInfo &cluster) const
+  {
+    Point best = {0, 0};
+    long long bestScore = -1e18;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+
+        long long score = valueScore(board, m_sign, x, y);
+        score -= obstaclePenalty(board, x, y);
+
+        if (cluster.valid)
+        {
+          int dist = std::abs(x - cluster.center_x) + std::abs(y - cluster.center_y);
+          score -= dist * 10;
+        }
+
+        if (score > bestScore)
+        {
+          bestScore = score;
+          best = {x, y};
+        }
+      }
+    }
+    return best;
+  }
+
   Point MyPlayer::make_move(const State &state)
   {
     Point result;

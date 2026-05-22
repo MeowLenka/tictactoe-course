@@ -56,6 +56,13 @@ namespace ttt::my_player
     long long evaluateCell(const FastBoard& board, int x, int y, const ClusterInfo& cluster, int moveNumber) const;
     // оенка всей позиции на поле
     long long evaluatePosition(const FastBoard& board, Sign currentPlayer) const;
+    // проверка, есть ли у игрока линия после хода
+    bool hasLineAfterMove(const FastBoard& board, int x, int y, Sign player) const;
+    // спецправило для победы X
+    bool isRealXWin(const FastBoard& board, int x, int y) const;
+    bool isXDraw(const FastBoard& board, int x, int y) const;
+    
+    Point chooseFirstMove(const FastBoard& board, const ClusterInfo& cluster) const;
     
 
   public:
