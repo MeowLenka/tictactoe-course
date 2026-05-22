@@ -382,6 +382,37 @@ namespace ttt::my_player
     return false;
   }
 
+  Point MyPlayer::chooseFirstMove(const FastBoard &board, const ClusterInfo &cluster) const
+  {
+    Point best = {0, 0};
+    long long bestScore = -1e18;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+
+        long long score = valueScore(board, m_sign, x, y);
+        score -= obstaclePenalty(board, x, y);
+
+        if (cluster.valid)
+        {
+          int dist = std::abs(x - cluster.center_x) + std::abs(y - cluster.center_y);
+          score -= dist * 10;
+        }
+
+        if (score > bestScore)
+        {
+          bestScore = score;
+          best = {x, y};
+        }
+      }
+    }
+    return best;
+  }
+
   Point MyPlayer::make_move(const State &state)
   {
     Point result;
