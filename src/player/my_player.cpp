@@ -220,6 +220,29 @@ namespace ttt::my_player
     return bonus > 0 ? bonus : 0;
   }
 
+  int MyPlayer::obstaclePenalty(const FastBoard &board, int x, int y) const
+  {
+    int penalty = 0;
+    for (int dy = -2; dy <= 2; ++dy)
+    {
+      for (int dx = -2; dx <= 2; ++dx)
+      {
+        if (dx == 0 && dy == 0)
+          continue;
+        int nx = x + dx;
+        int ny = y + dy;
+        Sign val = board.get(nx, ny);
+
+        if (val == Sign::WALL)
+        {
+          int distance = std::abs(dx) + std::abs(dy);
+          penalty += (4 - distance) * 5;
+        }
+      }
+    }
+    return penalty;
+  }
+  
   long long MyPlayer::evaluateCell(const FastBoard &board, int x, int y,
                                    const ClusterInfo &cluster, int moveNumber) const
   {
