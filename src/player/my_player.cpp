@@ -413,6 +413,35 @@ namespace ttt::my_player
     return best;
   }
 
+  std::vector<MyPlayer::RatedMove> MyPlayer::getOrderedMoves(FastBoard &board, Sign player) const
+  {
+    std::vector<RatedMove> moves;
+    Sign opponent = (player == Sign::X) ? Sign::O : Sign::X;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+        if (!isPromising(board, x, y))
+          continue;
+
+        long long myValue = valueScore(board, player, x, y);
+        long long oppValue = valueScore(board, opponent, x, y);
+
+        // если это выигрышный ход
+        if (hasLineAfterMove(board, x, y, player))
+        {
+          moves.push_back({x, y, WIN_SCORE});
+          continue;
+        }
+
+        long long weight = myValue * 3 + oppValue * 2;
+        moves.push_back({x, y, weight});
+      }
+    }
+
   Point MyPlayer::make_move(const State &state)
   {
     Point result;

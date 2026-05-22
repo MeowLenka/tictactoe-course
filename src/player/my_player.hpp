@@ -33,6 +33,11 @@ namespace ttt::my_player
       bool isValid(int x, int y) const;
     };
 
+    struct RatedMove {
+        int x, y;
+        long long weight;
+    };
+    
     struct ClusterInfo {
         bool valid = false;
         int center_x = 0;
@@ -63,6 +68,8 @@ namespace ttt::my_player
     bool isXDraw(const FastBoard& board, int x, int y) const;
     
     Point chooseFirstMove(const FastBoard& board, const ClusterInfo& cluster) const;
+    // сортировка ходов для negamax
+    std::vector<RatedMove> getOrderedMoves(FastBoard& board, Sign player) const;
     
 
   public:
