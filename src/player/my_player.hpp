@@ -54,6 +54,8 @@ namespace ttt::my_player
     int obstaclePenalty(const FastBoard& board, int x, int y) const;
     // жадная оценка клетки
     long long evaluateCell(const FastBoard& board, int x, int y, const ClusterInfo& cluster, int moveNumber) const;
+    // оенка всей позиции на поле
+    long long evaluatePosition(const FastBoard& board, Sign currentPlayer) const;
     
 
   public:

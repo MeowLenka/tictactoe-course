@@ -6,10 +6,11 @@ namespace ttt::my_player
 
   std::array<long long, 243> MyPlayer::s_patternScore;
   bool MyPlayer::s_tablesInitialized = false;
-  
+
   static const long long WIN_SCORE = 1000000000LL;
-    static const int ATTACK_COEFF = 4; 
-  static const int DEFENSE_COEFF = 2; 
+  static const int ATTACK_COEFF = 4;                 // коэффициент для своих value
+  static const int DEFENSE_COEFF = 2;                // коэффициент для чужих value
+  static const double POSITION_DEFENSE_FACTOR = 0.8; // при оценке позиции
 
   void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
   const char *MyPlayer::get_name() const { return m_name; }
@@ -200,7 +201,7 @@ namespace ttt::my_player
       {
         if (dx == 0 && dy == 0)
           continue;
-          
+
         Sign val = board.get(x + dx, y + dy);
         if (val == Sign::X || val == Sign::O)
           return true;
@@ -249,9 +250,9 @@ namespace ttt::my_player
   {
     if (board.get(x, y) != Sign::NONE)
       return -1e18;
-    
+
     Sign opponent = (m_sign == Sign::X) ? Sign::O : Sign::X;
-    
+
     long long myValue = valueScore(board, m_sign, x, y);
     long long oppValue = valueScore(board, opponent, x, y);
 
@@ -261,7 +262,7 @@ namespace ttt::my_player
     score += centerBonus(x, y, moveNumber);
     score -= obstaclePenalty(board, x, y);
 
-    // + за близость к центру крупного кластера
+    // + за близость к центру кластера
     if (cluster.valid)
     {
       int distToCluster = std::abs(x - cluster.center_x) + std::abs(y - cluster.center_y);
@@ -269,6 +270,26 @@ namespace ttt::my_player
         score += 100 * (4 - distToCluster);
     }
     return score;
+  }
+
+  long long MyPlayer::evaluatePosition(const FastBoard &board, Sign current) const
+  {
+    long long myScore = 0;
+    long long oppScore = 0;
+    Sign opponent = (current == Sign::X) ? Sign::O : Sign::X;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) == Sign::NONE && isPromising(board, x, y))
+        {
+          myScore += valueScore(board, current, x, y);
+          oppScore += valueScore(board, opponent, x, y);
+        }
+      }
+    }
+    return myScore - static_cast<long long>(oppScore * POSITION_DEFENSE_FACTOR);
   }
 
   Point MyPlayer::make_move(const State &state)
