@@ -33,9 +33,30 @@ namespace ttt::my_player
       bool isValid(int x, int y) const;
     };
 
-    long long scoreLine(const std::array<int, 9> &line) const;
+    struct ClusterInfo {
+        bool valid = false;
+        int center_x = 0;
+        int center_y = 0;
+        int size = 0;
+    };
+
+    // построение линии из 9 клеток через заданную клетку
     void buildLine(const FastBoard &board, Sign player, int x, int y, int dx, int dy, std::array<int, 9> &line) const;
+    // оценка линии через скользящие окна
+    long long scoreLine(const std::array<int, 9> &line) const;
+    // оценка ценности клетки для заданного игрока
     long long valueScore(const FastBoard &board, Sign player, int x, int y) const;
+    // проверка, перспективна ли клетка (есть ли соседи в радиусе 2)
+    bool isPromising(const FastBoard& board, int x, int y) const;
+    // бонус центра (первые 4 хода)
+    int centerBonus(int x, int y, int moveNumber) const;
+    // штраф за близость к препятствиям
+    int obstaclePenalty(const FastBoard& board, int x, int y) const;
+    // жадная оценка клетки
+    long long evaluateCell(const FastBoard& board, int x, int y, const ClusterInfo& cluster, int moveNumber) const;
+    // оенка всей позиции на поле
+    long long evaluatePosition(const FastBoard& board, Sign currentPlayer) const;
+    
 
   public:
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
