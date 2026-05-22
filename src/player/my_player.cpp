@@ -360,6 +360,28 @@ namespace ttt::my_player
     return true;
   }
 
+   bool MyPlayer::isXDraw(const FastBoard &board, int x, int y) const
+  {
+    if (!hasLineAfterMove(board, x, y, Sign::X))
+      return false;
+
+    FastBoard afterX = board;
+    afterX.set(x, y, Sign::X);
+
+    for (int oy = 0; oy < afterX.rows; ++oy)
+    {
+      for (int ox = 0; ox < afterX.cols; ++ox)
+      {
+        if (afterX.get(ox, oy) == Sign::NONE)
+        {
+          if (hasLineAfterMove(afterX, ox, oy, Sign::O))
+            return true;
+        }
+      }
+    }
+    return false;
+  }
+
   Point MyPlayer::make_move(const State &state)
   {
     Point result;

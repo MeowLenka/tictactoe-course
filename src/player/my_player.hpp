@@ -60,7 +60,8 @@ namespace ttt::my_player
     bool hasLineAfterMove(const FastBoard& board, int x, int y, Sign player) const;
     // спецправило для победы X
     bool isRealXWin(const FastBoard& board, int x, int y) const;
-   
+    bool isXDraw(const FastBoard& board, int x, int y) const;
+    
 
   public:
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
