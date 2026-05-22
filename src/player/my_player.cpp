@@ -324,6 +324,42 @@ namespace ttt::my_player
     return false;
   }
 
+  bool MyPlayer::isRealXWin(const FastBoard &board, int x, int y) const 
+  {
+    if (!hasLineAfterMove(board, x, y, Sign::X))
+      return false;
+
+    FastBoard afterX = board;
+    afterX.set(x, y, Sign::X);
+
+    // если поле заполнено, O не может ответить
+    int freeCount = 0;
+    for (int i = 0; i < afterX.rows; ++i)
+    {
+      for (int j = 0; j < afterX.cols; ++j)
+      {
+        if (afterX.get(j, i) == Sign::NONE)
+          freeCount++;
+      }
+    }
+    if (freeCount == 0)
+      return true;
+
+    // может ли O ответить победой
+    for (int oy = 0; oy < afterX.rows; ++oy)
+    {
+      for (int ox = 0; ox < afterX.cols; ++ox)
+      {
+        if (afterX.get(ox, oy) == Sign::NONE)
+        {
+          if (hasLineAfterMove(afterX, ox, oy, Sign::O))
+            return false;
+        }
+      }
+    }
+    return true;
+  }
+
   Point MyPlayer::make_move(const State &state)
   {
     Point result;

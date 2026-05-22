@@ -58,7 +58,9 @@ namespace ttt::my_player
     long long evaluatePosition(const FastBoard& board, Sign currentPlayer) const;
     // проверка, есть ли у игрока линия после хода
     bool hasLineAfterMove(const FastBoard& board, int x, int y, Sign player) const;
-    
+    // спецправило для победы X
+    bool isRealXWin(const FastBoard& board, int x, int y) const;
+   
 
   public:
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
