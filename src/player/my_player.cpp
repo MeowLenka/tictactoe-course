@@ -190,6 +190,24 @@ namespace ttt::my_player
     return totalScore;
   }
 
+  bool MyPlayer::isPromising(const FastBoard &board, int x, int y) const
+  {
+    for (int dy = -2; dy <= 2; ++dy)
+    {
+      for (int dx = -2; dx <= 2; ++dx)
+      {
+        if (dx == 0 && dy == 0)
+          continue;
+        Sign val = board.get(x + dx, y + dy);
+        if (val == Sign::X || val == Sign::O)
+        {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  
   long long MyPlayer::evaluateCell(const FastBoard &board, int x, int y,
                                    const ClusterInfo &cluster, int moveNumber) const
   {
