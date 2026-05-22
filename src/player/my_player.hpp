@@ -37,7 +37,7 @@ namespace ttt::my_player
         int x, y;
         long long weight;
     };
-    
+
     struct ClusterInfo {
         bool valid = false;
         int center_x = 0;
@@ -70,6 +70,8 @@ namespace ttt::my_player
     Point chooseFirstMove(const FastBoard& board, const ClusterInfo& cluster) const;
     // сортировка ходов для negamax
     std::vector<RatedMove> getOrderedMoves(FastBoard& board, Sign player) const;
+    // динамическая глубина для negamax
+    int getDynamicDepth(const FastBoard& board, Sign current) const;
     
 
   public:

@@ -7,11 +7,16 @@ namespace ttt::my_player
   std::array<long long, 243> MyPlayer::s_patternScore;
   bool MyPlayer::s_tablesInitialized = false;
 
+  static const int WIN_LENGTH = 5;
+  static const int BASE_DEPTH = 3;
+  static const int MAX_DEPTH = 5;
+  
   static const long long WIN_SCORE = 1000000000LL;
   static const int ATTACK_COEFF = 4;                 // коэффициент для своих value
   static const int DEFENSE_COEFF = 2;                // коэффициент для чужих value
   static const double POSITION_DEFENSE_FACTOR = 0.8; // при оценке позиции
 
+  
   void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
   const char *MyPlayer::get_name() const { return m_name; }
 
@@ -441,6 +446,31 @@ namespace ttt::my_player
         moves.push_back({x, y, weight});
       }
     }
+  }
+
+  int MyPlayer::getDynamicDepth(const FastBoard &board, Sign current) const
+  {
+    // поиск угроз длины 4 или 3
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+
+        long long myValue = valueScore(board, current, x, y);
+        long long oppValue = valueScore(board, (current == Sign::X) ? Sign::O : Sign::X, x, y);
+
+        if (myValue >= 200000 || oppValue >= 200000)
+          return MAX_DEPTH;
+
+        if (myValue >= 5000 || oppValue >= 5000)
+          return MAX_DEPTH - 1;
+      }
+    }
+    return BASE_DEPTH;
+  }
+  
 
   Point MyPlayer::make_move(const State &state)
   {
