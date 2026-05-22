@@ -190,6 +190,31 @@ namespace ttt::my_player
     return totalScore;
   }
 
+  long long MyPlayer::evaluateCell(const FastBoard &board, int x, int y,
+                                   const ClusterInfo &cluster, int moveNumber) const
+  {
+    if (board.get(x, y) != Sign::NONE)
+      return -1e18;
+
+    Sign opponent = (m_sign == Sign::X) ? Sign::O : Sign::X;
+    long long myThreat = valueScore(board, m_sign, x, y);
+    long long oppThreat = valueScore(board, opponent, x, y);
+    long long score = ATTACK_COEFF * myThreat + DEFENSE_COEFF * oppThreat;
+
+    score += centerBonus(x, y, moveNumber);
+    score -= obstaclePenalty(board, x, y);
+
+    if (cluster.valid)
+    {
+      int distToCluster = std::abs(x - cluster.center_x) + std::abs(y - cluster.center_y);
+      if (distToCluster <= 3)
+      {
+        score += 100 * (4 - distToCluster);
+      }
+    }
+    return score;
+  }
+
   Point MyPlayer::make_move(const State &state)
   {
     Point result;

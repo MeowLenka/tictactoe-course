@@ -33,9 +33,22 @@ namespace ttt::my_player
       bool isValid(int x, int y) const;
     };
 
+    struct ClusterInfo {
+        bool valid = false;
+        int center_x = 0;
+        int center_y = 0;
+        int size = 0;
+    };
+    
     long long scoreLine(const std::array<int, 9> &line) const;
     void buildLine(const FastBoard &board, Sign player, int x, int y, int dx, int dy, std::array<int, 9> &line) const;
     long long valueScore(const FastBoard &board, Sign player, int x, int y) const;
+
+    bool isPromising(const FastBoard& board, int x, int y) const;
+    int centerBonus(int x, int y, int moveNumber) const;
+    int obstaclePenalty(const FastBoard& board, int x, int y) const;
+    long long evaluateCell(const FastBoard& board, int x, int y, const ClusterInfo& cluster, int moveNumber) const;
+    
 
   public:
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
