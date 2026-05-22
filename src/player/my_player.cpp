@@ -207,7 +207,19 @@ namespace ttt::my_player
     }
     return false;
   }
-  
+
+  int MyPlayer::centerBonus(int x, int y, int moveNumber) const
+  {
+    if (moveNumber >= 4)
+      return 0;
+
+    int centerX = 10;
+    int centerY = 10;
+    int distance = std::abs(x - centerX) + std::abs(y - centerY);
+    int bonus = 4 - distance;
+    return bonus > 0 ? bonus : 0;
+  }
+
   long long MyPlayer::evaluateCell(const FastBoard &board, int x, int y,
                                    const ClusterInfo &cluster, int moveNumber) const
   {
