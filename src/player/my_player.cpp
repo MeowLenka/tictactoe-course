@@ -8,6 +8,8 @@ namespace ttt::my_player
   bool MyPlayer::s_tablesInitialized = false;
   
   static const long long WIN_SCORE = 1000000000LL;
+    static const int ATTACK_COEFF = 4; 
+  static const int DEFENSE_COEFF = 2; 
 
   void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
   const char *MyPlayer::get_name() const { return m_name; }
@@ -198,11 +200,10 @@ namespace ttt::my_player
       {
         if (dx == 0 && dy == 0)
           continue;
+          
         Sign val = board.get(x + dx, y + dy);
         if (val == Sign::X || val == Sign::O)
-        {
           return true;
-        }
       }
     }
     return false;
@@ -242,28 +243,30 @@ namespace ttt::my_player
     }
     return penalty;
   }
-  
+
   long long MyPlayer::evaluateCell(const FastBoard &board, int x, int y,
                                    const ClusterInfo &cluster, int moveNumber) const
   {
     if (board.get(x, y) != Sign::NONE)
       return -1e18;
-
+    
     Sign opponent = (m_sign == Sign::X) ? Sign::O : Sign::X;
-    long long myThreat = valueScore(board, m_sign, x, y);
-    long long oppThreat = valueScore(board, opponent, x, y);
-    long long score = ATTACK_COEFF * myThreat + DEFENSE_COEFF * oppThreat;
+    
+    long long myValue = valueScore(board, m_sign, x, y);
+    long long oppValue = valueScore(board, opponent, x, y);
+
+    // оценка
+    long long score = ATTACK_COEFF * myValue + DEFENSE_COEFF * oppValue;
 
     score += centerBonus(x, y, moveNumber);
     score -= obstaclePenalty(board, x, y);
 
+    // + за близость к центру крупного кластера
     if (cluster.valid)
     {
       int distToCluster = std::abs(x - cluster.center_x) + std::abs(y - cluster.center_y);
       if (distToCluster <= 3)
-      {
         score += 100 * (4 - distToCluster);
-      }
     }
     return score;
   }
