@@ -292,6 +292,38 @@ namespace ttt::my_player
     return myScore - static_cast<long long>(oppScore * POSITION_DEFENSE_FACTOR);
   }
 
+   bool MyPlayer::hasLineAfterMove(const FastBoard &board, int x, int y, Sign player) const
+  {
+    FastBoard copy = board;
+    copy.set(x, y, player);
+
+    const int directions[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
+    for (const auto &dir : directions)
+    {
+      int count = 1;
+      for (int i = 1; i <= 4; ++i)
+      {
+        Sign val = copy.get(x + i * dir[0], y + i * dir[1]);
+        if (val == player)
+          count++;
+        else
+          break;
+      }
+      for (int i = 1; i <= 4; ++i)
+      {
+        Sign val = copy.get(x - i * dir[0], y - i * dir[1]);
+        if (val == player)
+          count++;
+        else
+          break;
+      }
+
+      if (count >= WIN_LENGTH)
+        return true;
+    }
+    return false;
+  }
+
   Point MyPlayer::make_move(const State &state)
   {
     Point result;
