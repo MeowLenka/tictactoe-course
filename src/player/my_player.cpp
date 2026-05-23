@@ -461,10 +461,10 @@ namespace ttt::my_player
         long long myValue = valueScore(board, current, x, y);
         long long oppValue = valueScore(board, (current == Sign::X) ? Sign::O : Sign::X, x, y);
 
-        if (myValue >= 200000 || oppValue >= 200000)
+        if (myValue >= 2000000 || oppValue >= 2000000)
           return MAX_DEPTH;
 
-        if (myValue >= 5000 || oppValue >= 5000)
+        if (myValue >= 50000 || oppValue >= 50000)
           return MAX_DEPTH - 1;
       }
     }

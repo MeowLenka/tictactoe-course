@@ -14,11 +14,15 @@ add_executable(test_fastboard test_fastboard.cpp)
 target_link_libraries(test_fastboard tttplayer)
 add_test(NAME test_fastboard COMMAND ./test_fastboard)
 
-
 # My value score tests
 add_executable(test_valuescore test_value_score.cpp)
 target_link_libraries(test_valuescore tttplayer)
 add_test(NAME test_valuescore COMMAND ./test_value_score)
+
+# My negamax tests
+add_executable(test_negamax test_negamax.cpp)
+target_link_libraries(test_negamax tttplayer)
+add_test(NAME test_negamax COMMAND ./test_negamax)
 
 
 # Targets that require full or prebuilt tttcore
