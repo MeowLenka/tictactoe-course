@@ -79,6 +79,9 @@ namespace ttt::my_player
     
     // поиск наибольшего свободного кластера
     ClusterInfo findLargestCluster(const FastBoard& board) const;
+    // самые перспективные клетки
+    std::vector<Point> getCandidateCells(const FastBoard& board) const;
+    
     
                       
   public:

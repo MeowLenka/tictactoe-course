@@ -579,6 +579,43 @@ namespace ttt::my_player
     return best;
   }
 
+  std::vector<Point> MyPlayer::getCandidateCells(const FastBoard &board) const
+  {
+    std::vector<Point> result;
+    bool hasAnyPiece = false;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        Sign val = board.get(x, y);
+        if (val == Sign::X || val == Sign::O)
+        {
+          hasAnyPiece = true;
+          break;
+        }
+      }
+      if (hasAnyPiece)
+        break;
+    }
+    // если на доске нет ни одной фигуры, то мы рассматриваем все клетки
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+
+        if (!hasAnyPiece || isPromising(board, x, y))
+        {
+          result.push_back({x, y});
+        }
+      }
+    }
+    return result;
+  }
+
+
   Point MyPlayer::make_move(const State &state)
   {
     Point result;
