@@ -73,7 +73,10 @@ namespace ttt::my_player
     // динамическая глубина для negamax
     int getDynamicDepth(const FastBoard& board, Sign current) const;
     
-
+    long long negamax(FastBoard& board, int depth, long long alpha, long long beta, 
+                      Sign currentPlayer, int lastX, int lastY, int moveNumber);
+    
+                      
   public:
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
     void set_sign(Sign sign) override;

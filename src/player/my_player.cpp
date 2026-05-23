@@ -471,6 +471,42 @@ namespace ttt::my_player
     return BASE_DEPTH;
   }
   
+  long long MyPlayer::negamax(FastBoard &board, int depth, long long alpha, long long beta,
+                              Sign current, int lastX, int lastY, int moveNumber)
+  {
+    Sign opponent = (current == Sign::X) ? Sign::O : Sign::X;
+    // проверка победы на предыдущем ходу
+    if (lastX >= 0 && hasLineAfterMove(board, lastX, lastY, opponent))
+      return -WIN_SCORE + depth * 1000;
+
+    if (depth == 0)
+      return evaluatePosition(board, current);
+
+    std::vector<RatedMove> moves = getOrderedMoves(board, current);
+
+    if (moves.empty())
+      return 0; // ничья
+
+    long long maxScore = -WIN_SCORE * 2;
+
+    for (const auto &move : moves)
+    {
+      // сохр старое значение для undo
+      Sign oldValue = board.get(move.x, move.y);
+      board.set(move.x, move.y, current);
+
+      long long score = -negamax(board, depth - 1, -beta, -alpha, opponent, move.x, move.y, moveNumber + 1);
+
+      board.set(move.x, move.y, oldValue);
+
+      maxScore = std::max(maxScore, score);
+      alpha = std::max(alpha, score);
+
+      if (alpha >= beta)
+        break;
+    }
+    return maxScore;
+  }
 
   Point MyPlayer::make_move(const State &state)
   {
