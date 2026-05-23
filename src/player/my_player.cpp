@@ -508,6 +508,77 @@ namespace ttt::my_player
     return maxScore;
   }
 
+  MyPlayer::ClusterInfo MyPlayer::findLargestCluster(const FastBoard &board) const
+  {
+    ClusterInfo best;
+    std::vector<std::vector<bool>> visited(board.rows, std::vector<bool>(board.cols, false));
+    const int dirs[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE || visited[y][x])
+          continue;
+
+        std::queue<Point> q;
+        std::vector<Point> component;
+        q.push({x, y});
+        visited[y][x] = true;
+
+        while (!q.empty())
+        {
+          Point p = q.front();
+          q.pop();
+          component.push_back(p);
+
+          for (const auto &dir : dirs)
+          {
+            int nx = p.x + dir[0];
+            int ny = p.y + dir[1];
+            if (board.isValid(nx, ny) && !visited[ny][nx] && board.get(nx, ny) == Sign::NONE)
+            {
+              visited[ny][nx] = true;
+              q.push({nx, ny});
+            }
+          }
+        }
+
+        if (component.size() > best.size)
+        {
+          best.size = component.size();
+          best.valid = true;
+
+          // поиск центра кластера (ближайший к геометрическому центру)
+          long long sumX = 0, sumY = 0;
+          for (const auto &p : component)
+          {
+            sumX += p.x;
+            sumY += p.y;
+          }
+          double centerX = (double)sumX / component.size();
+          double centerY = (double)sumY / component.size();
+
+          // клетка, ближайшая к центру
+          long long bestDist = 1e18;
+          for (const auto &p : component)
+          {
+            long long dx = p.x - centerX;
+            long long dy = p.y - centerY;
+            long long dist = dx * dx + dy * dy;
+            if (dist < bestDist)
+            {
+              bestDist = dist;
+              best.center_x = p.x;
+              best.center_y = p.y;
+            }
+          }
+        }
+      }
+    }
+    return best;
+  }
+
   Point MyPlayer::make_move(const State &state)
   {
     Point result;
