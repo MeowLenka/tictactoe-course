@@ -2,6 +2,7 @@
 
 #include "core/game.hpp"
 #include <array>
+#include <vector>
 
 namespace ttt::my_player
 {
@@ -13,7 +14,7 @@ namespace ttt::my_player
 
   class MyPlayer : public IPlayer
   {
-  // public:
+  public:
     Sign m_sign = Sign::NONE;
     const char *m_name;
 
@@ -31,6 +32,11 @@ namespace ttt::my_player
       Sign get(int x, int y) const;
       void set(int x, int y, Sign sign);
       bool isValid(int x, int y) const;
+    };
+
+    struct RatedMove {
+        int x, y;
+        long long weight;
     };
 
     struct ClusterInfo {
@@ -63,9 +69,16 @@ namespace ttt::my_player
     bool isXDraw(const FastBoard& board, int x, int y) const;
     
     Point chooseFirstMove(const FastBoard& board, const ClusterInfo& cluster) const;
+    // сортировка ходов для negamax
+    std::vector<RatedMove> getOrderedMoves(FastBoard& board, Sign player) const;
+    // динамическая глубина для negamax
+    int getDynamicDepth(const FastBoard& board, Sign current) const;
     
-
-  public:
+    long long negamax(FastBoard& board, int depth, long long alpha, long long beta, 
+                      Sign currentPlayer, int lastX, int lastY, int moveNumber);
+    
+                      
+  // public:
     MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
     void set_sign(Sign sign) override;
     Point make_move(const State &game) override;

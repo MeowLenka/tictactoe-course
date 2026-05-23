@@ -7,11 +7,16 @@ namespace ttt::my_player
   std::array<long long, 243> MyPlayer::s_patternScore;
   bool MyPlayer::s_tablesInitialized = false;
 
+  static const int WIN_LENGTH = 5;
+  static const int BASE_DEPTH = 3;
+  static const int MAX_DEPTH = 5;
+  
   static const long long WIN_SCORE = 1000000000LL;
   static const int ATTACK_COEFF = 4;                 // коэффициент для своих value
   static const int DEFENSE_COEFF = 2;                // коэффициент для чужих value
   static const double POSITION_DEFENSE_FACTOR = 0.8; // при оценке позиции
 
+  
   void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
   const char *MyPlayer::get_name() const { return m_name; }
 
@@ -411,6 +416,96 @@ namespace ttt::my_player
       }
     }
     return best;
+  }
+
+  std::vector<MyPlayer::RatedMove> MyPlayer::getOrderedMoves(FastBoard &board, Sign player) const
+  {
+    std::vector<RatedMove> moves;
+    Sign opponent = (player == Sign::X) ? Sign::O : Sign::X;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+        if (!isPromising(board, x, y))
+          continue;
+
+        long long myValue = valueScore(board, player, x, y);
+        long long oppValue = valueScore(board, opponent, x, y);
+
+        // если это выигрышный ход
+        if (hasLineAfterMove(board, x, y, player))
+        {
+          moves.push_back({x, y, WIN_SCORE});
+          continue;
+        }
+
+        long long weight = myValue * 3 + oppValue * 2;
+        moves.push_back({x, y, weight});
+      }
+    }
+  }
+
+  int MyPlayer::getDynamicDepth(const FastBoard &board, Sign current) const
+  {
+    // поиск угроз длины 4 или 3
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+
+        long long myValue = valueScore(board, current, x, y);
+        long long oppValue = valueScore(board, (current == Sign::X) ? Sign::O : Sign::X, x, y);
+
+        if (myValue >= 2000000 || oppValue >= 2000000)
+          return MAX_DEPTH;
+
+        if (myValue >= 50000 || oppValue >= 50000)
+          return MAX_DEPTH - 1;
+      }
+    }
+    return BASE_DEPTH;
+  }
+  
+  long long MyPlayer::negamax(FastBoard &board, int depth, long long alpha, long long beta,
+                              Sign current, int lastX, int lastY, int moveNumber)
+  {
+    Sign opponent = (current == Sign::X) ? Sign::O : Sign::X;
+    // проверка победы на предыдущем ходу
+    if (lastX >= 0 && hasLineAfterMove(board, lastX, lastY, opponent))
+      return -WIN_SCORE + depth * 1000;
+
+    if (depth == 0)
+      return evaluatePosition(board, current);
+
+    std::vector<RatedMove> moves = getOrderedMoves(board, current);
+
+    if (moves.empty())
+      return 0; // ничья
+
+    long long maxScore = -WIN_SCORE * 2;
+
+    for (const auto &move : moves)
+    {
+      // сохр старое значение для undo
+      Sign oldValue = board.get(move.x, move.y);
+      board.set(move.x, move.y, current);
+
+      long long score = -negamax(board, depth - 1, -beta, -alpha, opponent, move.x, move.y, moveNumber + 1);
+
+      board.set(move.x, move.y, oldValue);
+
+      maxScore = std::max(maxScore, score);
+      alpha = std::max(alpha, score);
+
+      if (alpha >= beta)
+        break;
+    }
+    return maxScore;
   }
 
   Point MyPlayer::make_move(const State &state)
