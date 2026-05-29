@@ -3,7 +3,15 @@
 #include <cassert>
 #include <iostream>
 
-int main(int argc, char *argv[]) {
+int test_fastboard_main();
+
+int main(int argc, char *argv[])
+{
+    return test_fastboard_main();
+}
+
+int test_fastboard_main()
+{
     ttt::game::State::Opts opts;
     opts.rows = opts.cols = 20;
     opts.win_len = 5;

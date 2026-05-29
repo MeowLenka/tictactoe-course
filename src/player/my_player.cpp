@@ -1,5 +1,9 @@
 #include "my_player.hpp"
-#include <cstdlib>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <queue>
+#include <iostream>
 
 namespace ttt::my_player
 {
@@ -8,15 +12,16 @@ namespace ttt::my_player
   bool MyPlayer::s_tablesInitialized = false;
 
   static const int WIN_LENGTH = 5;
+  static const int SEARCH_WIDTH = 8; // топ-8 кандидатов
   static const int BASE_DEPTH = 3;
   static const int MAX_DEPTH = 5;
-  
+
   static const long long WIN_SCORE = 1000000000LL;
+  static const long long DRAW_SCORE = 10000000LL;
   static const int ATTACK_COEFF = 4;                 // коэффициент для своих value
   static const int DEFENSE_COEFF = 2;                // коэффициент для чужих value
   static const double POSITION_DEFENSE_FACTOR = 0.8; // при оценке позиции
 
-  
   void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
   const char *MyPlayer::get_name() const { return m_name; }
 
@@ -27,9 +32,7 @@ namespace ttt::my_player
     for (int y = 0; y < rows; ++y)
     {
       for (int x = 0; x < cols; ++x)
-      {
         grid[y][x] = state.get_value(x, y);
-      }
     }
   }
 
@@ -446,6 +449,16 @@ namespace ttt::my_player
         moves.push_back({x, y, weight});
       }
     }
+
+    std::sort(moves.begin(), moves.end(), [](const RatedMove &a, const RatedMove &b)
+              { return a.weight > b.weight; });
+
+    if (moves.size() > static_cast<size_t>(SEARCH_WIDTH))
+    {
+      moves.resize(SEARCH_WIDTH);
+    }
+
+    return moves;
   }
 
   int MyPlayer::getDynamicDepth(const FastBoard &board, Sign current) const
@@ -618,37 +631,109 @@ namespace ttt::my_player
 
   Point MyPlayer::make_move(const State &state)
   {
-    Point result;
-    for (int n_attempt = 0; n_attempt < 50; ++n_attempt)
+    initTables();
+    FastBoard board;
+    board.sync(state);
+
+    int moveNumber = state.get_move_no();
+    ClusterInfo cluster = findLargestCluster(board);
+    std::vector<Point> cells = getCandidateCells(board);
+
+    if (cells.empty())
+      return {0, 0}; 
+
+    if (moveNumber == 0)
+      return chooseFirstMove(board, cluster);
+
+    Sign opponent = (m_sign == Sign::X) ? Sign::O : Sign::X;
+
+    // немедленная победа 
+    if (m_sign == Sign::O)
     {
-      result.x = std::rand() % state.get_opts().cols;
-      result.y = std::rand() % state.get_opts().rows;
-      if (state.get_value(result.x, result.y) != Sign::NONE)
+      for (const auto &cell : cells)
       {
-        --n_attempt;
-        continue;
+        if (hasLineAfterMove(board, cell.x, cell.y, Sign::O))
+          return cell;
       }
-      bool has_neighbors = false;
-      for (int dx = -1; dx <= 1; ++dx)
-      {
-        for (int dy = -1; dy <= 1; ++dy)
-        {
-          if (dx == 0 && dy == 0)
-            continue;
-          const Sign val = state.get_value(result.x + dx, result.y + dy);
-          if (val == Sign::X || val == Sign::O)
-          {
-            has_neighbors = true;
-            break;
-          }
-        }
-        if (has_neighbors)
-          break;
-      }
-      if (has_neighbors)
-        break;
     }
-    return result;
+    else
+    {
+      for (const auto &cell : cells)
+      {
+        if (isRealXWin(board, cell.x, cell.y))
+          return cell;
+      }
+    }
+
+    // защита от победы противника
+    for (const auto &cell : cells)
+    {
+      if (hasLineAfterMove(board, cell.x, cell.y, opponent))
+        return cell;
+    }
+
+    // запоминаем ничейный ход для X 
+    Point drawMove = cells[0];
+    bool hasDraw = false;
+
+    if (m_sign == Sign::X)
+    {
+      for (const auto &cell : cells)
+      {
+        if (isXDraw(board, cell.x, cell.y))
+        {
+          drawMove = cell;
+          hasDraw = true;
+          break;
+        }
+      }
+    }
+
+    // жадная оценка и отбор кандидатов
+    std::vector<RatedMove> rootMoves;
+
+    for (const auto &cell : cells)
+    {
+      long long score = evaluateCell(board, cell.x, cell.y, cluster, moveNumber);
+      // проверка на мгновенную победу 
+      if (valueScore(board, m_sign, cell.x, cell.y) >= WIN_SCORE)
+        return cell;
+
+      rootMoves.push_back({cell.x, cell.y, score});
+    }
+
+    std::sort(rootMoves.begin(), rootMoves.end(), [](const RatedMove &a, const RatedMove &b)
+              { return a.weight > b.weight; });
+
+    if (rootMoves.size() > static_cast<size_t>(SEARCH_WIDTH))
+      rootMoves.resize(SEARCH_WIDTH);
+
+    // негамакс на кандидатах 
+    int depth = getDynamicDepth(board, m_sign);
+    long long bestScore = -WIN_SCORE * 2;
+    Point bestMove = {rootMoves[0].x, rootMoves[0].y};
+
+    for (const auto &move : rootMoves)
+    {
+      Sign oldValue = board.get(move.x, move.y);
+      board.set(move.x, move.y, m_sign);
+
+      long long score = -negamax(board, depth - 1, -WIN_SCORE * 2, WIN_SCORE * 2,
+                                 opponent, move.x, move.y, moveNumber + 1);
+
+      board.set(move.x, move.y, oldValue);
+
+      if (score > bestScore)
+      {
+        bestScore = score;
+        bestMove = {move.x, move.y}; 
+      }
+    }
+    // уход в ничью для X 
+    if (m_sign == Sign::X && hasDraw && bestScore < 0)
+      return drawMove;
+
+    return bestMove;
   }
 
 }; // namespace ttt::my_player
