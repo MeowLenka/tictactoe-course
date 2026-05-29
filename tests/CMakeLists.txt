@@ -17,7 +17,7 @@ add_test(NAME test_fastboard COMMAND ./test_fastboard)
 # My value score tests
 add_executable(test_valuescore test_value_score.cpp)
 target_link_libraries(test_valuescore tttplayer)
-add_test(NAME test_valuescore COMMAND ./test_value_score)
+add_test(NAME test_valuescore COMMAND ./test_valuescore)
 
 # My negamax tests
 add_executable(test_negamax test_negamax.cpp)

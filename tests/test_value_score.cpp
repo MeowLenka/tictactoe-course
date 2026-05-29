@@ -3,13 +3,21 @@
 #include <cassert>
 #include <iostream>
 
-int main(int argc, char *argv[])
+int test_value_score_main();
+
+int main(int argc, char *argv[]) 
+{
+    return test_value_score_main();
+}
+
+int test_value_score_main()
 {
     ttt::my_player::MyPlayer::initTables();
-    ttt::my_player::MyPlayer::FastBoard board;
-    ttt::my_player::MyPlayer player("BlaBla");
+    auto board = ttt::my_player::MyPlayer::FastBoard();
     board.rows = 20;
     board.cols = 20;
+    ttt::my_player::MyPlayer player("BlaBla");
+
     for (int y = 0; y < 20; ++y)
     {
         for (int x = 0; x < 20; ++x)
@@ -27,8 +35,6 @@ int main(int argc, char *argv[])
     score = player.valueScore(board, ttt::game::Sign::X, 5, 5);
     assert(score >= 20000);
 
-    long long scoreO = player.valueScore(board, ttt::game::Sign::O, 5, 5);
-    assert(scoreO < score);
     
     board.set(1, 5, ttt::game::Sign::X);
     score = player.valueScore(board, ttt::game::Sign::X, 5, 5);

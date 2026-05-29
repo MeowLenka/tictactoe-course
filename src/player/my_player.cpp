@@ -1,5 +1,9 @@
 #include "my_player.hpp"
-#include <cstdlib>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <queue>
+#include <iostream>
 
 namespace ttt::my_player
 {
@@ -8,15 +12,16 @@ namespace ttt::my_player
   bool MyPlayer::s_tablesInitialized = false;
 
   static const int WIN_LENGTH = 5;
+  static const int SEARCH_WIDTH = 8; // топ-8 кандидатов
   static const int BASE_DEPTH = 3;
   static const int MAX_DEPTH = 5;
-  
+
   static const long long WIN_SCORE = 1000000000LL;
+  static const long long DRAW_SCORE = 10000000LL;
   static const int ATTACK_COEFF = 4;                 // коэффициент для своих value
   static const int DEFENSE_COEFF = 2;                // коэффициент для чужих value
   static const double POSITION_DEFENSE_FACTOR = 0.8; // при оценке позиции
 
-  
   void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
   const char *MyPlayer::get_name() const { return m_name; }
 
@@ -27,9 +32,7 @@ namespace ttt::my_player
     for (int y = 0; y < rows; ++y)
     {
       for (int x = 0; x < cols; ++x)
-      {
         grid[y][x] = state.get_value(x, y);
-      }
     }
   }
 
@@ -446,6 +449,16 @@ namespace ttt::my_player
         moves.push_back({x, y, weight});
       }
     }
+
+    std::sort(moves.begin(), moves.end(), [](const RatedMove &a, const RatedMove &b)
+              { return a.weight > b.weight; });
+
+    if (moves.size() > static_cast<size_t>(SEARCH_WIDTH))
+    {
+      moves.resize(SEARCH_WIDTH);
+    }
+
+    return moves;
   }
 
   int MyPlayer::getDynamicDepth(const FastBoard &board, Sign current) const
@@ -508,39 +521,219 @@ namespace ttt::my_player
     return maxScore;
   }
 
-  Point MyPlayer::make_move(const State &state)
+  MyPlayer::ClusterInfo MyPlayer::findLargestCluster(const FastBoard &board) const
   {
-    Point result;
-    for (int n_attempt = 0; n_attempt < 50; ++n_attempt)
+    ClusterInfo best;
+    std::vector<std::vector<bool>> visited(board.rows, std::vector<bool>(board.cols, false));
+    const int dirs[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+
+    for (int y = 0; y < board.rows; ++y)
     {
-      result.x = std::rand() % state.get_opts().cols;
-      result.y = std::rand() % state.get_opts().rows;
-      if (state.get_value(result.x, result.y) != Sign::NONE)
+      for (int x = 0; x < board.cols; ++x)
       {
-        --n_attempt;
-        continue;
-      }
-      bool has_neighbors = false;
-      for (int dx = -1; dx <= 1; ++dx)
-      {
-        for (int dy = -1; dy <= 1; ++dy)
+        if (board.get(x, y) != Sign::NONE || visited[y][x])
+          continue;
+
+        std::queue<Point> q;
+        std::vector<Point> component;
+        q.push({x, y});
+        visited[y][x] = true;
+
+        while (!q.empty())
         {
-          if (dx == 0 && dy == 0)
-            continue;
-          const Sign val = state.get_value(result.x + dx, result.y + dy);
-          if (val == Sign::X || val == Sign::O)
+          Point p = q.front();
+          q.pop();
+          component.push_back(p);
+
+          for (const auto &dir : dirs)
           {
-            has_neighbors = true;
-            break;
+            int nx = p.x + dir[0];
+            int ny = p.y + dir[1];
+            if (board.isValid(nx, ny) && !visited[ny][nx] && board.get(nx, ny) == Sign::NONE)
+            {
+              visited[ny][nx] = true;
+              q.push({nx, ny});
+            }
           }
         }
-        if (has_neighbors)
-          break;
+
+        if (component.size() > best.size)
+        {
+          best.size = component.size();
+          best.valid = true;
+
+          // поиск центра кластера (ближайший к геометрическому центру)
+          long long sumX = 0, sumY = 0;
+          for (const auto &p : component)
+          {
+            sumX += p.x;
+            sumY += p.y;
+          }
+          double centerX = (double)sumX / component.size();
+          double centerY = (double)sumY / component.size();
+
+          // клетка, ближайшая к центру
+          long long bestDist = 1e18;
+          for (const auto &p : component)
+          {
+            long long dx = p.x - centerX;
+            long long dy = p.y - centerY;
+            long long dist = dx * dx + dy * dy;
+            if (dist < bestDist)
+            {
+              bestDist = dist;
+              best.center_x = p.x;
+              best.center_y = p.y;
+            }
+          }
+        }
       }
-      if (has_neighbors)
+    }
+    return best;
+  }
+
+  std::vector<Point> MyPlayer::getCandidateCells(const FastBoard &board) const
+  {
+    std::vector<Point> result;
+    bool hasAnyPiece = false;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        Sign val = board.get(x, y);
+        if (val == Sign::X || val == Sign::O)
+        {
+          hasAnyPiece = true;
+          break;
+        }
+      }
+      if (hasAnyPiece)
         break;
     }
+    // если на доске нет ни одной фигуры, то мы рассматриваем все клетки
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+
+        if (!hasAnyPiece || isPromising(board, x, y))
+        {
+          result.push_back({x, y});
+        }
+      }
+    }
     return result;
+  }
+
+
+  Point MyPlayer::make_move(const State &state)
+  {
+    initTables();
+    FastBoard board;
+    board.sync(state);
+
+    int moveNumber = state.get_move_no();
+    ClusterInfo cluster = findLargestCluster(board);
+    std::vector<Point> cells = getCandidateCells(board);
+
+    if (cells.empty())
+      return {0, 0}; 
+
+    if (moveNumber == 0)
+      return chooseFirstMove(board, cluster);
+
+    Sign opponent = (m_sign == Sign::X) ? Sign::O : Sign::X;
+
+    // немедленная победа 
+    if (m_sign == Sign::O)
+    {
+      for (const auto &cell : cells)
+      {
+        if (hasLineAfterMove(board, cell.x, cell.y, Sign::O))
+          return cell;
+      }
+    }
+    else
+    {
+      for (const auto &cell : cells)
+      {
+        if (isRealXWin(board, cell.x, cell.y))
+          return cell;
+      }
+    }
+
+    // защита от победы противника
+    for (const auto &cell : cells)
+    {
+      if (hasLineAfterMove(board, cell.x, cell.y, opponent))
+        return cell;
+    }
+
+    // запоминаем ничейный ход для X 
+    Point drawMove = cells[0];
+    bool hasDraw = false;
+
+    if (m_sign == Sign::X)
+    {
+      for (const auto &cell : cells)
+      {
+        if (isXDraw(board, cell.x, cell.y))
+        {
+          drawMove = cell;
+          hasDraw = true;
+          break;
+        }
+      }
+    }
+
+    // жадная оценка и отбор кандидатов
+    std::vector<RatedMove> rootMoves;
+
+    for (const auto &cell : cells)
+    {
+      long long score = evaluateCell(board, cell.x, cell.y, cluster, moveNumber);
+      // проверка на мгновенную победу 
+      if (valueScore(board, m_sign, cell.x, cell.y) >= WIN_SCORE)
+        return cell;
+
+      rootMoves.push_back({cell.x, cell.y, score});
+    }
+
+    std::sort(rootMoves.begin(), rootMoves.end(), [](const RatedMove &a, const RatedMove &b)
+              { return a.weight > b.weight; });
+
+    if (rootMoves.size() > static_cast<size_t>(SEARCH_WIDTH))
+      rootMoves.resize(SEARCH_WIDTH);
+
+    // негамакс на кандидатах 
+    int depth = getDynamicDepth(board, m_sign);
+    long long bestScore = -WIN_SCORE * 2;
+    Point bestMove = {rootMoves[0].x, rootMoves[0].y};
+
+    for (const auto &move : rootMoves)
+    {
+      Sign oldValue = board.get(move.x, move.y);
+      board.set(move.x, move.y, m_sign);
+
+      long long score = -negamax(board, depth - 1, -WIN_SCORE * 2, WIN_SCORE * 2,
+                                 opponent, move.x, move.y, moveNumber + 1);
+
+      board.set(move.x, move.y, oldValue);
+
+      if (score > bestScore)
+      {
+        bestScore = score;
+        bestMove = {move.x, move.y}; 
+      }
+    }
+    // уход в ничью для X 
+    if (m_sign == Sign::X && hasDraw && bestScore < 0)
+      return drawMove;
+
+    return bestMove;
   }
 
 }; // namespace ttt::my_player
