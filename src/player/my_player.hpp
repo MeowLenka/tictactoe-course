@@ -1,24 +1,97 @@
 #pragma once
 
 #include "core/game.hpp"
+#include <array>
+#include <vector>
 
-namespace ttt::my_player {
+extern int test_value_score_main();
 
-using game::Event;
-using game::IPlayer;
-using game::Point;
-using game::Sign;
-using game::State;
 
-class MyPlayer : public IPlayer {
-  Sign m_sign = Sign::NONE;
-  const char *m_name;
+namespace ttt::my_player
+{
+  using game::Event;
+  using game::IPlayer;
+  using game::Point;
+  using game::Sign;
+  using game::State;
 
-public:
-  MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
-  void set_sign(Sign sign) override;
-  Point make_move(const State &game) override;
-  const char *get_name() const override;
-};
+  class MyPlayer : public IPlayer
+  {
+    public:
+    Sign m_sign = Sign::NONE;
+    const char *m_name;
+
+    static std::array<long long, 243> s_patternScore;
+    static bool s_tablesInitialized;
+    static void initTables();
+    static int windowToIndex(const std::array<int, 5> &window);
+
+    struct FastBoard
+    {
+      std::array<std::array<Sign, 20>, 20> grid;
+      int rows, cols;
+
+      void sync(const State &state);
+      Sign get(int x, int y) const;
+      void set(int x, int y, Sign sign);
+      bool isValid(int x, int y) const;
+    };
+
+    struct RatedMove
+    {
+      int x, y;
+      long long weight;
+    };
+
+    struct ClusterInfo
+    {
+      bool valid = false;
+      int center_x = 0;
+      int center_y = 0;
+      int size = 0;
+    };
+
+    // построение линии из 9 клеток через заданную клетку
+    void buildLine(const FastBoard &board, Sign player, int x, int y, int dx, int dy, std::array<int, 9> &line) const;
+    // оценка линии через скользящие окна
+    long long scoreLine(const std::array<int, 9> &line) const;
+    // оценка ценности клетки для заданного игрока
+    long long valueScore(const FastBoard &board, Sign player, int x, int y) const;
+    // проверка, перспективна ли клетка (есть ли соседи в радиусе 2)
+    bool isPromising(const FastBoard &board, int x, int y) const;
+    // бонус центра (первые 4 хода)
+    int centerBonus(int x, int y, int moveNumber) const;
+    // штраф за близость к препятствиям
+    int obstaclePenalty(const FastBoard &board, int x, int y) const;
+    // жадная оценка клетки
+    long long evaluateCell(const FastBoard &board, int x, int y, const ClusterInfo &cluster, int moveNumber) const;
+    // оенка всей позиции на поле
+    long long evaluatePosition(const FastBoard &board, Sign currentPlayer) const;
+    // проверка, есть ли у игрока линия после хода
+    bool hasLineAfterMove(const FastBoard &board, int x, int y, Sign player) const;
+    // спецправило для победы X
+    bool isRealXWin(const FastBoard &board, int x, int y) const;
+    bool isXDraw(const FastBoard &board, int x, int y) const;
+
+    Point chooseFirstMove(const FastBoard &board, const ClusterInfo &cluster) const;
+    // сортировка ходов для negamax
+    std::vector<RatedMove> getOrderedMoves(FastBoard &board, Sign player) const;
+    // динамическая глубина для negamax
+    int getDynamicDepth(const FastBoard &board, Sign current) const;
+
+    long long negamax(FastBoard &board, int depth, long long alpha, long long beta,
+                      Sign currentPlayer, int lastX, int lastY, int moveNumber);
+
+    // поиск наибольшего свободного кластера
+    ClusterInfo findLargestCluster(const FastBoard &board) const;
+    // самые перспективные клетки
+    std::vector<Point> getCandidateCells(const FastBoard &board) const;
+
+  public:
+    MyPlayer(const char *name) : m_sign(Sign::NONE), m_name(name) {}
+    void set_sign(Sign sign) override;
+    Point make_move(const State &game) override;
+    const char *get_name() const override;
+  };
 
 }; // namespace ttt::my_player

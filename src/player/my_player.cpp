@@ -1,38 +1,739 @@
 #include "my_player.hpp"
-#include <cstdlib>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <queue>
+#include <iostream>
 
-namespace ttt::my_player {
+namespace ttt::my_player
+{
 
-void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
-const char *MyPlayer::get_name() const { return m_name; }
+  std::array<long long, 243> MyPlayer::s_patternScore;
+  bool MyPlayer::s_tablesInitialized = false;
 
-Point MyPlayer::make_move(const State &state) {
-  Point result;
-  for (int n_attempt = 0; n_attempt < 50; ++n_attempt) {
-    result.x = std::rand() % state.get_opts().cols;
-    result.y = std::rand() % state.get_opts().rows;
-    if (state.get_value(result.x, result.y) != Sign::NONE) {
-      --n_attempt;
-      continue;
+  static const int WIN_LENGTH = 5;
+  static const int SEARCH_WIDTH = 8; // топ-8 кандидатов
+  static const int BASE_DEPTH = 3;
+  static const int MAX_DEPTH = 5;
+
+  static const long long WIN_SCORE = 1000000000LL;
+  static const long long DRAW_SCORE = 10000000LL;
+  static const int ATTACK_COEFF = 4;                 // коэффициент для своих value
+  static const int DEFENSE_COEFF = 2;                // коэффициент для чужих value
+  static const double POSITION_DEFENSE_FACTOR = 0.8; // при оценке позиции
+
+  void MyPlayer::set_sign(Sign sign) { m_sign = sign; }
+  const char *MyPlayer::get_name() const { return m_name; }
+
+  void MyPlayer::FastBoard::sync(const State &state)
+  {
+    rows = state.get_opts().rows;
+    cols = state.get_opts().cols;
+    for (int y = 0; y < rows; ++y)
+    {
+      for (int x = 0; x < cols; ++x)
+        grid[y][x] = state.get_value(x, y);
     }
-    bool has_neighbors = false;
-    for (int dx = -1; dx <= 1; ++dx) {
-      for (int dy = -1; dy <= 1; ++dy) {
+  }
+
+  Sign MyPlayer::FastBoard::get(int x, int y) const
+  {
+    if (x < 0 || x >= cols || y < 0 || y >= rows)
+      return Sign::WALL;
+    return grid[y][x];
+  }
+
+  bool MyPlayer::FastBoard::isValid(int x, int y) const
+  {
+    return x >= 0 && x < cols && y >= 0 && y < rows;
+  }
+
+  void MyPlayer::FastBoard::set(int x, int y, Sign sign)
+  {
+    if (isValid(x, y))
+      grid[y][x] = sign;
+  }
+
+  void MyPlayer::initTables()
+  {
+    if (s_tablesInitialized)
+      return;
+
+    for (int idx = 0; idx < 243; ++idx)
+    {
+      int temp = idx;
+      std::array<int, 5> window;
+      int ownCount = 0;
+      int emptyCount = 0;
+      int blockedCount = 0;
+
+      for (int i = 0; i < 5; ++i)
+      {
+        window[i] = temp % 3;
+        if (window[i] == 1)
+          ownCount++; // наш символ
+        else if (window[i] == 0)
+          emptyCount++; // пусто
+        else
+          blockedCount++; // чужой символ или стена
+        temp /= 3;
+      }
+      // если есть чужой или стена внутри окна -> оценка 0
+      if (blockedCount > 0)
+      {
+        s_patternScore[idx] = 0;
+        continue;
+      }
+      // дальше идет оценка шаблонов
+      if (ownCount == 5)
+        s_patternScore[idx] = WIN_SCORE;
+
+      else if (ownCount == 4 && emptyCount == 1)
+        s_patternScore[idx] = 500000LL; // открытая четверка
+
+      else if (ownCount == 4)
+        s_patternScore[idx] = 50000LL; // закрытая четверка
+
+      else if (ownCount == 3 && emptyCount == 2)
+      {
+        if (window[0] == 0 && window[4] == 0)
+          s_patternScore[idx] = 20000LL; // открытая по краям тройка
+        else
+          s_patternScore[idx] = 5000LL; // полуоткрытая тройка
+      }
+
+      else if (ownCount == 2 && emptyCount == 3)
+      {
+        if (window[0] == 0 && window[4] == 0)
+          s_patternScore[idx] = 500LL; // открытая двойка
+        else
+          s_patternScore[idx] = 100LL; // полуоткрытая двойка
+      }
+
+      else if (ownCount == 1 && emptyCount == 4)
+        s_patternScore[idx] = 30LL;
+
+      else
+        s_patternScore[idx] = 0;
+    }
+
+    s_tablesInitialized = true;
+  }
+
+  int MyPlayer::windowToIndex(const std::array<int, 5> &window)
+  {
+    int idx = 0;
+    int power = 1;
+    for (int i = 0; i < 5; ++i)
+    {
+      idx += window[i] * power;
+      power *= 3;
+    }
+    return idx;
+  }
+
+  void MyPlayer::buildLine(const FastBoard &board, Sign player, int x, int y,
+                           int dx, int dy, std::array<int, 9> &line) const
+  {
+    for (int k = -4; k <= 4; ++k)
+    {
+      int idx = k + 4;
+      if (k == 0)
+      {
+        line[idx] = 1;
+        continue;
+      }
+
+      int nx = x + k * dx;
+      int ny = y + k * dy;
+      Sign val = board.get(nx, ny);
+
+      if (val == player)
+        line[idx] = 1; // свой символ
+      else if (val == Sign::NONE)
+        line[idx] = 0; // пусто
+      else
+        line[idx] = 2; // чужой или стена
+    }
+  }
+
+  long long MyPlayer::scoreLine(const std::array<int, 9> &line) const
+  {
+    long long score = 0;
+    // окна по 5 клеток
+    for (int i = 0; i < 5; ++i)
+    {
+      std::array<int, 5> window;
+      for (int j = 0; j < 5; ++j)
+        window[j] = line[i + j];
+
+      int idx = windowToIndex(window);
+      score += s_patternScore[idx];
+    }
+    return score;
+  }
+
+  long long MyPlayer::valueScore(const FastBoard &board, Sign player, int x, int y) const
+  {
+    if (board.get(x, y) != Sign::NONE)
+      return 0;
+
+    const int directions[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
+    long long totalScore = 0;
+    int valueCount = 0;
+
+    for (const auto &dir : directions)
+    {
+      std::array<int, 9> line;
+      buildLine(board, player, x, y, dir[0], dir[1], line);
+      long long segmentScore = scoreLine(line);
+
+      if (segmentScore >= 5000) // открытая четвёрка или тройка
+      {
+        valueCount++;
+      }
+      totalScore += segmentScore;
+    }
+    if (valueCount >= 2)
+    {
+      totalScore *= 10;
+    }
+    return totalScore;
+  }
+
+  bool MyPlayer::isPromising(const FastBoard &board, int x, int y) const
+  {
+    for (int dy = -2; dy <= 2; ++dy)
+    {
+      for (int dx = -2; dx <= 2; ++dx)
+      {
         if (dx == 0 && dy == 0)
           continue;
-        const Sign val = state.get_value(result.x + dx, result.y + dy);
-        if (val == Sign::X || val == Sign::O) {
-          has_neighbors = true;
+
+        Sign val = board.get(x + dx, y + dy);
+        if (val == Sign::X || val == Sign::O)
+          return true;
+      }
+    }
+    return false;
+  }
+
+  int MyPlayer::centerBonus(int x, int y, int moveNumber) const
+  {
+    if (moveNumber >= 4)
+      return 0;
+
+    int centerX = 10;
+    int centerY = 10;
+    int distance = std::abs(x - centerX) + std::abs(y - centerY);
+    int bonus = 4 - distance;
+    return bonus > 0 ? bonus : 0;
+  }
+
+  int MyPlayer::obstaclePenalty(const FastBoard &board, int x, int y) const
+  {
+    int penalty = 0;
+    for (int dy = -2; dy <= 2; ++dy)
+    {
+      for (int dx = -2; dx <= 2; ++dx)
+      {
+        if (dx == 0 && dy == 0)
+          continue;
+        int nx = x + dx;
+        int ny = y + dy;
+        Sign val = board.get(nx, ny);
+
+        if (val == Sign::WALL)
+        {
+          int distance = std::abs(dx) + std::abs(dy);
+          penalty += (4 - distance) * 5;
+        }
+      }
+    }
+    return penalty;
+  }
+
+  long long MyPlayer::evaluateCell(const FastBoard &board, int x, int y,
+                                   const ClusterInfo &cluster, int moveNumber) const
+  {
+    if (board.get(x, y) != Sign::NONE)
+      return -1e18;
+
+    Sign opponent = (m_sign == Sign::X) ? Sign::O : Sign::X;
+
+    long long myValue = valueScore(board, m_sign, x, y);
+    long long oppValue = valueScore(board, opponent, x, y);
+
+    // оценка
+    long long score = ATTACK_COEFF * myValue + DEFENSE_COEFF * oppValue;
+
+    score += centerBonus(x, y, moveNumber);
+    score -= obstaclePenalty(board, x, y);
+
+    // + за близость к центру кластера
+    if (cluster.valid)
+    {
+      int distToCluster = std::abs(x - cluster.center_x) + std::abs(y - cluster.center_y);
+      if (distToCluster <= 3)
+        score += 100 * (4 - distToCluster);
+    }
+    return score;
+  }
+
+  long long MyPlayer::evaluatePosition(const FastBoard &board, Sign current) const
+  {
+    long long myScore = 0;
+    long long oppScore = 0;
+    Sign opponent = (current == Sign::X) ? Sign::O : Sign::X;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) == Sign::NONE && isPromising(board, x, y))
+        {
+          myScore += valueScore(board, current, x, y);
+          oppScore += valueScore(board, opponent, x, y);
+        }
+      }
+    }
+    return myScore - static_cast<long long>(oppScore * POSITION_DEFENSE_FACTOR);
+  }
+
+   bool MyPlayer::hasLineAfterMove(const FastBoard &board, int x, int y, Sign player) const
+  {
+    FastBoard copy = board;
+    copy.set(x, y, player);
+
+    const int directions[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
+    for (const auto &dir : directions)
+    {
+      int count = 1;
+      for (int i = 1; i <= 4; ++i)
+      {
+        Sign val = copy.get(x + i * dir[0], y + i * dir[1]);
+        if (val == player)
+          count++;
+        else
+          break;
+      }
+      for (int i = 1; i <= 4; ++i)
+      {
+        Sign val = copy.get(x - i * dir[0], y - i * dir[1]);
+        if (val == player)
+          count++;
+        else
+          break;
+      }
+
+      if (count >= WIN_LENGTH)
+        return true;
+    }
+    return false;
+  }
+
+  bool MyPlayer::isRealXWin(const FastBoard &board, int x, int y) const 
+  {
+    if (!hasLineAfterMove(board, x, y, Sign::X))
+      return false;
+
+    FastBoard afterX = board;
+    afterX.set(x, y, Sign::X);
+
+    // если поле заполнено, O не может ответить
+    int freeCount = 0;
+    for (int i = 0; i < afterX.rows; ++i)
+    {
+      for (int j = 0; j < afterX.cols; ++j)
+      {
+        if (afterX.get(j, i) == Sign::NONE)
+          freeCount++;
+      }
+    }
+    if (freeCount == 0)
+      return true;
+
+    // может ли O ответить победой
+    for (int oy = 0; oy < afterX.rows; ++oy)
+    {
+      for (int ox = 0; ox < afterX.cols; ++ox)
+      {
+        if (afterX.get(ox, oy) == Sign::NONE)
+        {
+          if (hasLineAfterMove(afterX, ox, oy, Sign::O))
+            return false;
+        }
+      }
+    }
+    return true;
+  }
+
+   bool MyPlayer::isXDraw(const FastBoard &board, int x, int y) const
+  {
+    if (!hasLineAfterMove(board, x, y, Sign::X))
+      return false;
+
+    FastBoard afterX = board;
+    afterX.set(x, y, Sign::X);
+
+    for (int oy = 0; oy < afterX.rows; ++oy)
+    {
+      for (int ox = 0; ox < afterX.cols; ++ox)
+      {
+        if (afterX.get(ox, oy) == Sign::NONE)
+        {
+          if (hasLineAfterMove(afterX, ox, oy, Sign::O))
+            return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Point MyPlayer::chooseFirstMove(const FastBoard &board, const ClusterInfo &cluster) const
+  {
+    Point best = {0, 0};
+    long long bestScore = -1e18;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+
+        long long score = valueScore(board, m_sign, x, y);
+        score -= obstaclePenalty(board, x, y);
+
+        if (cluster.valid)
+        {
+          int dist = std::abs(x - cluster.center_x) + std::abs(y - cluster.center_y);
+          score -= dist * 10;
+        }
+
+        if (score > bestScore)
+        {
+          bestScore = score;
+          best = {x, y};
+        }
+      }
+    }
+    return best;
+  }
+
+  std::vector<MyPlayer::RatedMove> MyPlayer::getOrderedMoves(FastBoard &board, Sign player) const
+  {
+    std::vector<RatedMove> moves;
+    Sign opponent = (player == Sign::X) ? Sign::O : Sign::X;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+        if (!isPromising(board, x, y))
+          continue;
+
+        long long myValue = valueScore(board, player, x, y);
+        long long oppValue = valueScore(board, opponent, x, y);
+
+        // если это выигрышный ход
+        if (hasLineAfterMove(board, x, y, player))
+        {
+          moves.push_back({x, y, WIN_SCORE});
+          continue;
+        }
+
+        long long weight = myValue * 3 + oppValue * 2;
+        moves.push_back({x, y, weight});
+      }
+    }
+
+    std::sort(moves.begin(), moves.end(), [](const RatedMove &a, const RatedMove &b)
+              { return a.weight > b.weight; });
+
+    if (moves.size() > static_cast<size_t>(SEARCH_WIDTH))
+    {
+      moves.resize(SEARCH_WIDTH);
+    }
+
+    return moves;
+  }
+
+  int MyPlayer::getDynamicDepth(const FastBoard &board, Sign current) const
+  {
+    // поиск угроз длины 4 или 3
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+
+        long long myValue = valueScore(board, current, x, y);
+        long long oppValue = valueScore(board, (current == Sign::X) ? Sign::O : Sign::X, x, y);
+
+        if (myValue >= 2000000 || oppValue >= 2000000)
+          return MAX_DEPTH;
+
+        if (myValue >= 50000 || oppValue >= 50000)
+          return MAX_DEPTH - 1;
+      }
+    }
+    return BASE_DEPTH;
+  }
+  
+  long long MyPlayer::negamax(FastBoard &board, int depth, long long alpha, long long beta,
+                              Sign current, int lastX, int lastY, int moveNumber)
+  {
+    Sign opponent = (current == Sign::X) ? Sign::O : Sign::X;
+    // проверка победы на предыдущем ходу
+    if (lastX >= 0 && hasLineAfterMove(board, lastX, lastY, opponent))
+      return -WIN_SCORE + depth * 1000;
+
+    if (depth == 0)
+      return evaluatePosition(board, current);
+
+    std::vector<RatedMove> moves = getOrderedMoves(board, current);
+
+    if (moves.empty())
+      return 0; // ничья
+
+    long long maxScore = -WIN_SCORE * 2;
+
+    for (const auto &move : moves)
+    {
+      // сохр старое значение для undo
+      Sign oldValue = board.get(move.x, move.y);
+      board.set(move.x, move.y, current);
+
+      long long score = -negamax(board, depth - 1, -beta, -alpha, opponent, move.x, move.y, moveNumber + 1);
+
+      board.set(move.x, move.y, oldValue);
+
+      maxScore = std::max(maxScore, score);
+      alpha = std::max(alpha, score);
+
+      if (alpha >= beta)
+        break;
+    }
+    return maxScore;
+  }
+
+  MyPlayer::ClusterInfo MyPlayer::findLargestCluster(const FastBoard &board) const
+  {
+    ClusterInfo best;
+    std::vector<std::vector<bool>> visited(board.rows, std::vector<bool>(board.cols, false));
+    const int dirs[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE || visited[y][x])
+          continue;
+
+        std::queue<Point> q;
+        std::vector<Point> component;
+        q.push({x, y});
+        visited[y][x] = true;
+
+        while (!q.empty())
+        {
+          Point p = q.front();
+          q.pop();
+          component.push_back(p);
+
+          for (const auto &dir : dirs)
+          {
+            int nx = p.x + dir[0];
+            int ny = p.y + dir[1];
+            if (board.isValid(nx, ny) && !visited[ny][nx] && board.get(nx, ny) == Sign::NONE)
+            {
+              visited[ny][nx] = true;
+              q.push({nx, ny});
+            }
+          }
+        }
+
+        if (component.size() > best.size)
+        {
+          best.size = component.size();
+          best.valid = true;
+
+          // поиск центра кластера (ближайший к геометрическому центру)
+          long long sumX = 0, sumY = 0;
+          for (const auto &p : component)
+          {
+            sumX += p.x;
+            sumY += p.y;
+          }
+          double centerX = (double)sumX / component.size();
+          double centerY = (double)sumY / component.size();
+
+          // клетка, ближайшая к центру
+          long long bestDist = 1e18;
+          for (const auto &p : component)
+          {
+            long long dx = p.x - centerX;
+            long long dy = p.y - centerY;
+            long long dist = dx * dx + dy * dy;
+            if (dist < bestDist)
+            {
+              bestDist = dist;
+              best.center_x = p.x;
+              best.center_y = p.y;
+            }
+          }
+        }
+      }
+    }
+    return best;
+  }
+
+  std::vector<Point> MyPlayer::getCandidateCells(const FastBoard &board) const
+  {
+    std::vector<Point> result;
+    bool hasAnyPiece = false;
+
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        Sign val = board.get(x, y);
+        if (val == Sign::X || val == Sign::O)
+        {
+          hasAnyPiece = true;
           break;
         }
       }
-      if (has_neighbors)
+      if (hasAnyPiece)
         break;
     }
-    if (has_neighbors)
-      break;
+    // если на доске нет ни одной фигуры, то мы рассматриваем все клетки
+    for (int y = 0; y < board.rows; ++y)
+    {
+      for (int x = 0; x < board.cols; ++x)
+      {
+        if (board.get(x, y) != Sign::NONE)
+          continue;
+
+        if (!hasAnyPiece || isPromising(board, x, y))
+        {
+          result.push_back({x, y});
+        }
+      }
+    }
+    return result;
   }
-  return result;
-}
+
+
+  Point MyPlayer::make_move(const State &state)
+  {
+    initTables();
+    FastBoard board;
+    board.sync(state);
+
+    int moveNumber = state.get_move_no();
+    ClusterInfo cluster = findLargestCluster(board);
+    std::vector<Point> cells = getCandidateCells(board);
+
+    if (cells.empty())
+      return {0, 0}; 
+
+    if (moveNumber == 0)
+      return chooseFirstMove(board, cluster);
+
+    Sign opponent = (m_sign == Sign::X) ? Sign::O : Sign::X;
+
+    // немедленная победа 
+    if (m_sign == Sign::O)
+    {
+      for (const auto &cell : cells)
+      {
+        if (hasLineAfterMove(board, cell.x, cell.y, Sign::O))
+          return cell;
+      }
+    }
+    else
+    {
+      for (const auto &cell : cells)
+      {
+        if (isRealXWin(board, cell.x, cell.y))
+          return cell;
+      }
+    }
+
+    // защита от победы противника
+    for (const auto &cell : cells)
+    {
+      if (hasLineAfterMove(board, cell.x, cell.y, opponent))
+        return cell;
+    }
+
+    // запоминаем ничейный ход для X 
+    Point drawMove = cells[0];
+    bool hasDraw = false;
+
+    if (m_sign == Sign::X)
+    {
+      for (const auto &cell : cells)
+      {
+        if (isXDraw(board, cell.x, cell.y))
+        {
+          drawMove = cell;
+          hasDraw = true;
+          break;
+        }
+      }
+    }
+
+    // жадная оценка и отбор кандидатов
+    std::vector<RatedMove> rootMoves;
+
+    for (const auto &cell : cells)
+    {
+      long long score = evaluateCell(board, cell.x, cell.y, cluster, moveNumber);
+      // проверка на мгновенную победу 
+      if (valueScore(board, m_sign, cell.x, cell.y) >= WIN_SCORE)
+        return cell;
+
+      rootMoves.push_back({cell.x, cell.y, score});
+    }
+
+    std::sort(rootMoves.begin(), rootMoves.end(), [](const RatedMove &a, const RatedMove &b)
+              { return a.weight > b.weight; });
+
+    if (rootMoves.size() > static_cast<size_t>(SEARCH_WIDTH))
+      rootMoves.resize(SEARCH_WIDTH);
+
+    // негамакс на кандидатах 
+    int depth = getDynamicDepth(board, m_sign);
+    long long bestScore = -WIN_SCORE * 2;
+    Point bestMove = {rootMoves[0].x, rootMoves[0].y};
+
+    for (const auto &move : rootMoves)
+    {
+      Sign oldValue = board.get(move.x, move.y);
+      board.set(move.x, move.y, m_sign);
+
+      long long score = -negamax(board, depth - 1, -WIN_SCORE * 2, WIN_SCORE * 2,
+                                 opponent, move.x, move.y, moveNumber + 1);
+
+      board.set(move.x, move.y, oldValue);
+
+      if (score > bestScore)
+      {
+        bestScore = score;
+        bestMove = {move.x, move.y}; 
+      }
+    }
+    // уход в ничью для X 
+    if (m_sign == Sign::X && hasDraw && bestScore < 0)
+      return drawMove;
+
+    return bestMove;
+  }
 
 }; // namespace ttt::my_player
